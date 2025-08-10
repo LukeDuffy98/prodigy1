@@ -47,6 +47,7 @@ DEPLOYMENT_PARAMS=$(jq -n \
   --arg appName "prodigy1" \
   --arg location "eastus" \
   --arg environment "dev" \
+  --arg appServicePlanSku "B1" \
   --argjson template "$(cat /tmp/main.json)" \
   '{
     "properties": {
@@ -54,7 +55,8 @@ DEPLOYMENT_PARAMS=$(jq -n \
       "parameters": {
         "appName": {"value": $appName},
         "location": {"value": $location},
-        "environment": {"value": $environment}
+        "environment": {"value": $environment},
+        "appServicePlanSku": {"value": $appServicePlanSku}
       },
       "mode": "Incremental"
     }
