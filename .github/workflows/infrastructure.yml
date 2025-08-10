@@ -155,25 +155,19 @@ jobs:
       run: |
         echo "🚀 Deploying infrastructure to ${{ github.event.inputs.environment }}..."
         
-        # Deploy without capturing full output to avoid "content consumed" error
+        # First compile Bicep to ARM template to avoid Azure CLI issues
+        echo "📝 Compiling Bicep template..."
+        az bicep build --file infrastructure/bicep/main.bicep --outfile /tmp/main.json
+        
+        # Deploy using ARM template
         echo "Starting deployment..."
         az deployment group create \
           --resource-group ${{ needs.set-environment.outputs.resource-group }} \
-          --template-file infrastructure/bicep/main.bicep \
+          --template-file /tmp/main.json \
           --parameters @infrastructure/bicep/${{ needs.set-environment.outputs.parameters-file }} \
-          --parameters appName=prodigy1 location=${{ env.AZURE_LOCATION }} environment=${{ github.event.inputs.environment }} \
-          --verbose
+          --parameters appName=prodigy1 location=${{ env.AZURE_LOCATION }} environment=${{ github.event.inputs.environment }}
         
         echo "✅ Infrastructure deployment completed successfully"
-        
-        # Get deployment details separately
-        echo "📊 Getting deployment information..."
-        DEPLOYMENT_NAME=$(az deployment group list \
-          --resource-group ${{ needs.set-environment.outputs.resource-group }} \
-          --query '[0].name' \
-          --output tsv)
-        
-        echo "Latest deployment: $DEPLOYMENT_NAME"
 
     - name: Configure CORS and Cross-App Settings
       run: |
