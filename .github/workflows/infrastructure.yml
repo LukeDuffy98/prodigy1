@@ -78,6 +78,12 @@ jobs:
       with:
         creds: ${{ secrets.AZURE_CREDENTIALS }}
 
+    - name: Verify Azure Connection
+      run: |
+        echo "Verifying Azure connection..."
+        az account show --output table
+        echo "Current subscription: $(az account show --query 'name' -o tsv)"
+
     - name: Install Bicep CLI
       run: |
         curl -Lo bicep https://github.com/Azure/bicep/releases/latest/download/bicep-linux-x64
@@ -87,11 +93,25 @@ jobs:
     - name: Validate Bicep template
       run: |
         echo "🔍 Validating Bicep template for ${{ github.event.inputs.environment }} environment..."
-        bicep build infrastructure/bicep/main.bicep --outfile /tmp/main.json
         
+        # Test Bicep compilation
+        bicep build infrastructure/bicep/main.bicep --outfile /tmp/main.json
         echo "✅ Bicep template compiled successfully"
         
-        # Validate against Azure (dry run)
+        # Test CORS config template too
+        bicep build infrastructure/bicep/cors-config.bicep --outfile /tmp/cors-config.json
+        echo "✅ CORS config template compiled successfully"
+        
+        # Create resource group if it doesn't exist for validation
+        echo "Ensuring resource group exists for validation..."
+        az group create \
+          --name ${{ needs.set-environment.outputs.resource-group }} \
+          --location ${{ env.AZURE_LOCATION }} \
+          --tags Environment=${{ github.event.inputs.environment }} Project=Prodigy1 \
+          || echo "Resource group already exists or creation failed - continuing..."
+        
+        # Validate main template against Azure (dry run)
+        echo "Running Azure deployment validation..."
         az deployment group validate \
           --resource-group ${{ needs.set-environment.outputs.resource-group }} \
           --template-file /tmp/main.json \
