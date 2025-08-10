@@ -64,13 +64,29 @@ DEPLOYMENT_PARAMS=$(jq -n \
 echo "🚀 Deploying infrastructure via REST API..."
 DEPLOYMENT_NAME="prodigy1-deployment-$(date +%s)"
 
+echo "🔧 Debug: Deployment name: $DEPLOYMENT_NAME"
+echo "🔧 Debug: Parameters size: $(echo "$DEPLOYMENT_PARAMS" | wc -c) bytes"
+
 DEPLOYMENT_RESPONSE=$(curl -s -X PUT \
   "https://management.azure.com/subscriptions/${AZURE_SUBSCRIPTION_ID}/resourcegroups/rg-prodigy1-dev/providers/Microsoft.Resources/deployments/${DEPLOYMENT_NAME}?api-version=2021-04-01" \
   -H "Authorization: Bearer $ACCESS_TOKEN" \
   -H "Content-Type: application/json" \
   -d "$DEPLOYMENT_PARAMS")
 
-echo "📊 Deployment initiated"
+echo "🔧 Debug: Deployment creation response:"
+echo "$DEPLOYMENT_RESPONSE" | head -c 1000
+
+# Check if deployment creation was successful
+DEPLOYMENT_STATUS=$(echo "$DEPLOYMENT_RESPONSE" | jq -r '.properties.provisioningState // "Unknown"')
+DEPLOYMENT_ERROR=$(echo "$DEPLOYMENT_RESPONSE" | jq -r '.error.code // "None"')
+
+if [ "$DEPLOYMENT_ERROR" != "None" ]; then
+  echo "❌ Failed to create deployment: $DEPLOYMENT_ERROR"
+  echo "$DEPLOYMENT_RESPONSE" | jq '.error // empty'
+  exit 1
+fi
+
+echo "📊 Deployment initiated with status: $DEPLOYMENT_STATUS"
 
 # Wait for deployment to complete
 echo "⏳ Waiting for deployment to complete..."
@@ -79,6 +95,17 @@ for i in {1..30}; do
   RESPONSE=$(curl -s -X GET \
     "https://management.azure.com/subscriptions/${AZURE_SUBSCRIPTION_ID}/resourcegroups/rg-prodigy1-dev/providers/Microsoft.Resources/deployments/${DEPLOYMENT_NAME}?api-version=2021-04-01" \
     -H "Authorization: Bearer $ACCESS_TOKEN")
+  
+  # Check if we got an error response
+  ERROR_CODE=$(echo "$RESPONSE" | jq -r '.error.code // "None"')
+  if [ "$ERROR_CODE" == "DeploymentNotFound" ]; then
+    echo "⚠️ Deployment not found yet (attempt $i/30) - deployment might still be starting..."
+    continue
+  elif [ "$ERROR_CODE" != "None" ]; then
+    echo "❌ Error checking deployment status: $ERROR_CODE"
+    echo "$RESPONSE" | jq '.error // empty'
+    exit 1
+  fi
   
   STATUS=$(echo "$RESPONSE" | jq -r '.properties.provisioningState // "Unknown"')
   
