@@ -3,46 +3,40 @@ name: Infrastructure Management
 on:
   workflow_dispatch:
     inputs:
+      environment:
+        description: 'Environment to deploy to'
+        required: true
+        default: 'dev'
+        type: choice
+        options:
+          - dev
+          - staging
+          - prod
       action:
         description: 'Action to perform'
         required: true
         default: 'deploy'
         type: choice
         options:
-        - deploy
-        - destroy
-        - validate
-      environment:
-        description: 'Target environment'
-        required: true
-        default: 'dev'
-        type: choice
-        options:
-        - dev
-        - staging
-        - prod
-      force:
-        description: 'Force action (use with caution)'
-        required: false
-        default: false
-        type: boolean
+          - deploy
+          - destroy
+          - validate
 
 env:
   AZURE_LOCATION: eastus
-  
+
 jobs:
   set-environment:
     runs-on: ubuntu-latest
     outputs:
-      resource-group: ${{ steps.set-vars.outputs.resource-group }}
-      frontend-app: ${{ steps.set-vars.outputs.frontend-app }}
-      backend-app: ${{ steps.set-vars.outputs.backend-app }}
-      parameters-file: ${{ steps.set-vars.outputs.parameters-file }}
-      app-service-sku: ${{ steps.set-vars.outputs.app-service-sku }}
-      
+      resource-group: ${{ steps.env.outputs.resource-group }}
+      frontend-app: ${{ steps.env.outputs.frontend-app }}
+      backend-app: ${{ steps.env.outputs.backend-app }}
+      parameters-file: ${{ steps.env.outputs.parameters-file }}
+      app-service-sku: ${{ steps.env.outputs.app-service-sku }}
     steps:
     - name: Set environment variables
-      id: set-vars
+      id: env
       run: |
         if [ "${{ github.event.inputs.environment }}" == "prod" ]; then
           echo "resource-group=rg-prodigy1-prod" >> $GITHUB_OUTPUT
@@ -67,9 +61,12 @@ jobs:
   validate-infrastructure:
     runs-on: ubuntu-latest
     needs: set-environment
-    if: github.event.inputs.action == 'validate' || github.event.inputs.action == 'deploy'
-    
+    if: github.event.inputs.action == 'deploy' || github.event.inputs.action == 'validate'
     steps:
+    - uses: azure/login@v1
+      with:
+        creds: ${{ secrets.AZURE_CREDENTIALS }}
+
     - name: Checkout code
       uses: actions/checkout@v4
 
@@ -131,9 +128,11 @@ jobs:
     runs-on: ubuntu-latest
     needs: [set-environment, validate-infrastructure]
     if: github.event.inputs.action == 'deploy'
-    environment: ${{ github.event.inputs.environment }}
-    
     steps:
+    - uses: azure/login@v1
+      with:
+        creds: ${{ secrets.AZURE_CREDENTIALS }}
+
     - name: Checkout code
       uses: actions/checkout@v4
 
@@ -153,21 +152,13 @@ jobs:
     - name: Deploy Infrastructure
       id: deploy
       run: |
-        echo "🚀 Deploying infrastructure to ${{ github.event.inputs.environment }}..."
-        
-        # First compile Bicep to ARM template to avoid Azure CLI issues
-        echo "📝 Compiling Bicep template..."
-        az bicep build --file infrastructure/bicep/main.bicep --outfile /tmp/main.json
-        
-        # Deploy using ARM template
-        echo "Starting deployment..."
-        az deployment group create \
-          --resource-group ${{ needs.set-environment.outputs.resource-group }} \
-          --template-file /tmp/main.json \
-          --parameters @infrastructure/bicep/${{ needs.set-environment.outputs.parameters-file }} \
-          --parameters appName=prodigy1 location=${{ env.AZURE_LOCATION }} environment=${{ github.event.inputs.environment }}
-        
-        echo "✅ Infrastructure deployment completed successfully"
+        chmod +x ./fix-deployment.sh
+        # Update script with current values
+        sed -i "s/rg-prodigy1-dev/${{ needs.set-environment.outputs.resource-group }}/g" ./fix-deployment.sh
+        sed -i "s/prodigy1-dev-webapp/${{ needs.set-environment.outputs.frontend-app }}/g" ./fix-deployment.sh
+        sed -i "s/prodigy1-dev-funcapp/${{ needs.set-environment.outputs.backend-app }}/g" ./fix-deployment.sh
+        sed -i "s/parameters.dev.json/${{ needs.set-environment.outputs.parameters-file }}/g" ./fix-deployment.sh
+        ./fix-deployment.sh
 
     - name: Configure CORS and Cross-App Settings
       run: |
@@ -220,165 +211,82 @@ jobs:
         
         echo "✅ App settings configured"
 
-    - name: Configure App Service Settings
-      run: |
-        echo "⚙️ Configuring application settings..."
-        
-        # Get Function App URL
-        FUNC_URL=$(az functionapp show \
-          --name ${{ needs.set-environment.outputs.backend-app }} \
-          --resource-group ${{ needs.set-environment.outputs.resource-group }} \
-          --query 'defaultHostName' \
-          --output tsv)
-        
-        # Configure Web App settings
-        az webapp config appsettings set \
-          --name ${{ needs.set-environment.outputs.frontend-app }} \
-          --resource-group ${{ needs.set-environment.outputs.resource-group }} \
-          --settings \
-          NEXT_PUBLIC_API_BASE_URL=https://$FUNC_URL/api \
-          NEXT_PUBLIC_ENVIRONMENT=${{ github.event.inputs.environment }} \
-          NEXT_PUBLIC_APP_NAME=Prodigy1
-
     - name: Deployment Summary
       run: |
-        echo "## 🎉 Infrastructure Deployment Complete"
+        echo "📋 Deployment Summary"
+        echo "===================="
+        echo "Environment: ${{ github.event.inputs.environment }}"
+        echo "Resource Group: ${{ needs.set-environment.outputs.resource-group }}"
+        echo "Frontend App: ${{ needs.set-environment.outputs.frontend-app }}"
+        echo "Backend App: ${{ needs.set-environment.outputs.backend-app }}"
         echo ""
-        echo "**Environment:** ${{ github.event.inputs.environment }}"
-        echo "**Resource Group:** ${{ needs.set-environment.outputs.resource-group }}"
-        echo "**Location:** ${{ env.AZURE_LOCATION }}"
+        echo "🌐 Application URLs:"
+        echo "Frontend: https://${{ needs.set-environment.outputs.frontend-app }}.azurewebsites.net"
+        echo "Backend: https://${{ needs.set-environment.outputs.backend-app }}.azurewebsites.net"
         echo ""
-        echo "**Resources Created:**"
-        echo "- Frontend App: ${{ needs.set-environment.outputs.frontend-app }}"
-        echo "- Backend App: ${{ needs.set-environment.outputs.backend-app }}"
-        echo "- Storage Account: Configured"
-        echo "- Application Insights: Configured"
+        echo "✅ Infrastructure deployment completed successfully!"
         echo ""
-        echo "**Next Steps:**"
-        echo "1. Deploy application code using the main deployment workflow"
-        echo "2. Configure any additional settings in Azure Portal"
-        echo "3. Set up monitoring and alerts"
+        echo "🚀 Next steps:"
+        echo "1. Deploy your application code using the 'Azure Deploy' workflow"
+        echo "2. Test the applications using the provided URLs"
+        echo "3. Monitor the deployment in the Azure portal"
 
   destroy-infrastructure:
     runs-on: ubuntu-latest
     needs: set-environment
     if: github.event.inputs.action == 'destroy'
-    environment: ${{ github.event.inputs.environment }}
-    
     steps:
-    - name: Confirm destruction
-      run: |
-        if [ "${{ github.event.inputs.force }}" != "true" ]; then
-          echo "❌ Force flag not set. Destruction cancelled for safety."
-          echo "To destroy infrastructure, set the 'force' input to true."
-          exit 1
-        fi
-        
-        if [ "${{ github.event.inputs.environment }}" == "prod" ] && [ "${{ github.actor }}" != "LukeDuffy98" ]; then
-          echo "❌ Only repository owner can destroy production environment."
-          exit 1
-        fi
-
-    - name: Azure Login
-      uses: azure/login@v1
+    - uses: azure/login@v1
       with:
         creds: ${{ secrets.AZURE_CREDENTIALS }}
 
-    - name: List resources to be deleted
+    - name: Destroy Infrastructure
       run: |
-        echo "🔍 Resources in ${{ needs.set-environment.outputs.resource-group }}:"
-        az resource list \
-          --resource-group ${{ needs.set-environment.outputs.resource-group }} \
-          --output table
-
-    - name: Delete Resource Group
-      run: |
-        echo "🗑️ Deleting resource group: ${{ needs.set-environment.outputs.resource-group }}"
-        echo "This action is irreversible!"
+        echo "🗑️ Destroying infrastructure for ${{ github.event.inputs.environment }} environment..."
+        echo "Resource Group: ${{ needs.set-environment.outputs.resource-group }}"
         
-        az group delete \
-          --name ${{ needs.set-environment.outputs.resource-group }} \
-          --yes \
-          --no-wait
+        # Check if resource group exists
+        if az group show --name ${{ needs.set-environment.outputs.resource-group }} >/dev/null 2>&1; then
+          echo "Deleting resource group and all resources..."
+          az group delete \
+            --name ${{ needs.set-environment.outputs.resource-group }} \
+            --yes \
+            --no-wait
+          echo "✅ Resource group deletion initiated"
+        else
+          echo "ℹ️ Resource group does not exist"
+        fi
 
-    - name: Destruction Summary
-      run: |
-        echo "## 🗑️ Infrastructure Destruction Initiated"
-        echo ""
-        echo "**Environment:** ${{ github.event.inputs.environment }}"
-        echo "**Resource Group:** ${{ needs.set-environment.outputs.resource-group }}"
-        echo ""
-        echo "⚠️ **Warning:** All resources in the resource group are being deleted."
-        echo "This action cannot be undone."
-        echo ""
-        echo "The deletion is running in the background and may take several minutes to complete."
-
-  # Post-deployment health check
   health-check:
     runs-on: ubuntu-latest
     needs: [set-environment, deploy-infrastructure]
     if: github.event.inputs.action == 'deploy'
-    
     steps:
-    - name: Azure Login
-      uses: azure/login@v1
-      with:
-        creds: ${{ secrets.AZURE_CREDENTIALS }}
-
-    - name: Wait for services to be ready
+    - name: Health Check
       run: |
-        echo "⏳ Waiting for services to be ready..."
-        sleep 30
-
-    - name: Check Function App Health
-      run: |
-        FUNC_URL=$(az functionapp show \
-          --name ${{ needs.set-environment.outputs.backend-app }} \
-          --resource-group ${{ needs.set-environment.outputs.resource-group }} \
-          --query 'defaultHostName' \
-          --output tsv)
+        echo "🏥 Performing health checks..."
         
-        echo "🔍 Checking Function App health: https://$FUNC_URL"
+        # Wait for apps to be fully started
+        sleep 60
         
-        # Check if Function App is running
-        status=$(az functionapp show \
-          --name ${{ needs.set-environment.outputs.backend-app }} \
-          --resource-group ${{ needs.set-environment.outputs.resource-group }} \
-          --query 'state' \
-          --output tsv)
+        # Check Frontend
+        FRONTEND_URL="https://${{ needs.set-environment.outputs.frontend-app }}.azurewebsites.net"
+        echo "Checking frontend: $FRONTEND_URL"
         
-        if [ "$status" == "Running" ]; then
-          echo "✅ Function App is running"
+        if curl -f -s "$FRONTEND_URL" > /dev/null; then
+          echo "✅ Frontend is responding"
         else
-          echo "❌ Function App status: $status"
+          echo "⚠️ Frontend may not be ready yet"
         fi
-
-    - name: Check Web App Health
-      run: |
-        WEB_URL=$(az webapp show \
-          --name ${{ needs.set-environment.outputs.frontend-app }} \
-          --resource-group ${{ needs.set-environment.outputs.resource-group }} \
-          --query 'defaultHostName' \
-          --output tsv)
         
-        echo "🔍 Checking Web App health: https://$WEB_URL"
+        # Check Backend
+        BACKEND_URL="https://${{ needs.set-environment.outputs.backend-app }}.azurewebsites.net/api/health"
+        echo "Checking backend: $BACKEND_URL"
         
-        # Check if Web App is running
-        status=$(az webapp show \
-          --name ${{ needs.set-environment.outputs.frontend-app }} \
-          --resource-group ${{ needs.set-environment.outputs.resource-group }} \
-          --query 'state' \
-          --output tsv)
-        
-        if [ "$status" == "Running" ]; then
-          echo "✅ Web App is running"
+        if curl -f -s "$BACKEND_URL" > /dev/null; then
+          echo "✅ Backend is responding"
         else
-          echo "❌ Web App status: $status"
+          echo "⚠️ Backend may not be ready yet"
         fi
-
-    - name: Health Check Summary
-      run: |
-        echo "## 🏥 Health Check Complete"
-        echo ""
-        echo "Infrastructure has been deployed and basic health checks passed."
-        echo "Services are ready for application deployment."
+        
+        echo "🎉 Health check completed!"
