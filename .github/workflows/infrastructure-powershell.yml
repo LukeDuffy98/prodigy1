@@ -55,7 +55,7 @@ jobs:
             echo "frontend-app=prodigy1-dev-webapp" >> $GITHUB_OUTPUT
             echo "backend-app=prodigy1-dev-funcapp" >> $GITHUB_OUTPUT
             echo "parameters-file=parameters.dev.json" >> $GITHUB_OUTPUT
-            echo "app-service-sku=F1" >> $GITHUB_OUTPUT
+            echo "app-service-sku=B1" >> $GITHUB_OUTPUT
           fi
 
   validate-infrastructure:
