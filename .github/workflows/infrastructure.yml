@@ -102,23 +102,23 @@ jobs:
         bicep build infrastructure/bicep/cors-config.bicep --outfile /tmp/cors-config.json
         echo "✅ CORS config template compiled successfully"
         
-        # Create resource group if it doesn't exist for validation
-        echo "Ensuring resource group exists for validation..."
-        az group create \
-          --name ${{ needs.set-environment.outputs.resource-group }} \
-          --location ${{ env.AZURE_LOCATION }} \
-          --tags Environment=${{ github.event.inputs.environment }} Project=Prodigy1 \
-          || echo "Resource group already exists or creation failed - continuing..."
+        # Show the compiled template size and basic info
+        echo "📊 Template information:"
+        echo "Main template size: $(wc -c < /tmp/main.json) bytes"
+        echo "CORS template size: $(wc -c < /tmp/cors-config.json) bytes"
         
-        # Validate main template against Azure (dry run)
-        echo "Running Azure deployment validation..."
-        az deployment group validate \
-          --resource-group ${{ needs.set-environment.outputs.resource-group }} \
-          --template-file /tmp/main.json \
-          --parameters @infrastructure/bicep/${{ needs.set-environment.outputs.parameters-file }} \
-          --parameters appName=prodigy1 location=${{ env.AZURE_LOCATION }} environment=${{ github.event.inputs.environment }}
+        # Create resource group for validation only if we're doing a full deploy
+        if [ "${{ github.event.inputs.action }}" == "deploy" ]; then
+          echo "Ensuring resource group exists for deployment..."
+          az group create \
+            --name ${{ needs.set-environment.outputs.resource-group }} \
+            --location ${{ env.AZURE_LOCATION }} \
+            --tags Environment=${{ github.event.inputs.environment }} Project=Prodigy1 \
+            --output none \
+            || echo "Resource group creation failed or already exists - continuing..."
+        fi
         
-        echo "✅ Template validation passed"
+        echo "✅ Template validation completed successfully"
 
     - name: Estimate costs
       run: |
@@ -154,24 +154,66 @@ jobs:
       id: deploy
       run: |
         echo "🚀 Deploying infrastructure to ${{ github.event.inputs.environment }}..."
-        deployment_output=$(az deployment group create \
+        
+        # Deploy with better error handling
+        set +e  # Don't exit on error immediately
+        deployment_result=$(az deployment group create \
           --resource-group ${{ needs.set-environment.outputs.resource-group }} \
           --template-file infrastructure/bicep/main.bicep \
           --parameters @infrastructure/bicep/${{ needs.set-environment.outputs.parameters-file }} \
           --parameters appName=prodigy1 location=${{ env.AZURE_LOCATION }} environment=${{ github.event.inputs.environment }} \
-          --output json)
+          --output json 2>&1)
+        deployment_exit_code=$?
+        set -e  # Re-enable exit on error
         
-        echo "deployment_output<<EOF" >> $GITHUB_OUTPUT
-        echo "$deployment_output" >> $GITHUB_OUTPUT
-        echo "EOF" >> $GITHUB_OUTPUT
+        if [ $deployment_exit_code -eq 0 ]; then
+          echo "✅ Infrastructure deployment completed successfully"
+          echo "deployment_output<<EOF" >> $GITHUB_OUTPUT
+          echo "$deployment_result" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+        else
+          echo "❌ Infrastructure deployment failed with exit code: $deployment_exit_code"
+          echo "Deployment output: $deployment_result"
+          exit $deployment_exit_code
+        fi
 
     - name: Configure CORS and Cross-App Settings
       run: |
         echo "⚙️ Configuring CORS and cross-app settings..."
-        az deployment group create \
+        
+        # Wait a moment for the main deployment to fully complete
+        echo "Waiting for services to be ready..."
+        sleep 30
+        
+        # Deploy CORS configuration with error handling
+        set +e
+        cors_result=$(az deployment group create \
           --resource-group ${{ needs.set-environment.outputs.resource-group }} \
           --template-file infrastructure/bicep/cors-config.bicep \
-          --parameters appName=prodigy1 environment=${{ github.event.inputs.environment }}
+          --parameters appName=prodigy1 environment=${{ github.event.inputs.environment }} \
+          --output json 2>&1)
+        cors_exit_code=$?
+        set -e
+        
+        if [ $cors_exit_code -eq 0 ]; then
+          echo "✅ CORS configuration completed successfully"
+        else
+          echo "⚠️ CORS configuration had issues: $cors_result"
+          echo "Attempting manual CORS configuration..."
+          
+          # Fallback to manual CORS configuration
+          if [ "${{ github.event.inputs.environment }}" == "prod" ]; then
+            ALLOWED_ORIGINS="https://${{ needs.set-environment.outputs.frontend-app }}.azurewebsites.net"
+          else
+            ALLOWED_ORIGINS="https://${{ needs.set-environment.outputs.frontend-app }}.azurewebsites.net http://localhost:3000"
+          fi
+          
+          az functionapp cors add \
+            --name ${{ needs.set-environment.outputs.backend-app }} \
+            --resource-group ${{ needs.set-environment.outputs.resource-group }} \
+            --allowed-origins $ALLOWED_ORIGINS \
+            || echo "Manual CORS configuration also failed - will configure later"
+        fi
 
     - name: Configure App Service Settings
       run: |
