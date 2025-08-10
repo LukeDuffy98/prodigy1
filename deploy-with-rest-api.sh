@@ -47,9 +47,10 @@ DEPLOYMENT_PARAMS=$(jq -n \
   --arg appName "prodigy1" \
   --arg location "eastus" \
   --arg environment "dev" \
+  --argjson template "$(cat /tmp/main.json)" \
   '{
     "properties": {
-      "template": '$(cat /tmp/main.json)',
+      "template": $template,
       "parameters": {
         "appName": {"value": $appName},
         "location": {"value": $location},
