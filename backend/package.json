@@ -1,0 +1,25 @@
+{
+  "name": "prodigy1-backend",
+  "version": "1.0.0",
+  "description": "Azure Functions backend for Prodigy1",
+  "scripts": {
+    "build": "tsc",
+    "watch": "tsc -w",
+    "prestart": "npm run build",
+    "start": "func start",
+    "test": "echo \"No tests yet...\"",
+    "deploy": "func azure functionapp publish prodigy1-dev-funcapp",
+    "deploy:prod": "func azure functionapp publish prodigy1-prod-funcapp"
+  },
+  "dependencies": {
+    "@azure/functions": "^4.0.0",
+    "@azure/cosmos": "^4.0.0",
+    "@azure/storage-blob": "^12.17.0",
+    "axios": "^1.5.0"
+  },
+  "devDependencies": {
+    "@azure/functions-worker": "^4.0.0",
+    "@types/node": "^20.8.0",
+    "typescript": "^5.2.0"
+  }
+}
