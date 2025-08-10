@@ -76,12 +76,18 @@ echo "📊 Deployment initiated"
 echo "⏳ Waiting for deployment to complete..."
 for i in {1..30}; do
   sleep 10
-  STATUS=$(curl -s -X GET \
+  RESPONSE=$(curl -s -X GET \
     "https://management.azure.com/subscriptions/${AZURE_SUBSCRIPTION_ID}/resourcegroups/rg-prodigy1-dev/providers/Microsoft.Resources/deployments/${DEPLOYMENT_NAME}?api-version=2021-04-01" \
-    -H "Authorization: Bearer $ACCESS_TOKEN" | \
-    jq -r '.properties.provisioningState // "Unknown"')
+    -H "Authorization: Bearer $ACCESS_TOKEN")
+  
+  STATUS=$(echo "$RESPONSE" | jq -r '.properties.provisioningState // "Unknown"')
   
   echo "Status: $STATUS"
+  
+  # Debug: Print full response if status is Unknown for the first few attempts
+  if [ "$STATUS" == "Unknown" ] && [ $i -le 3 ]; then
+    echo "Debug response: $RESPONSE" | head -c 500
+  fi
   
   if [ "$STATUS" == "Succeeded" ]; then
     echo "✅ Infrastructure deployment completed successfully"
@@ -89,24 +95,27 @@ for i in {1..30}; do
   elif [ "$STATUS" == "Failed" ]; then
     echo "❌ Infrastructure deployment failed"
     # Get error details
-    curl -s -X GET \
-      "https://management.azure.com/subscriptions/${AZURE_SUBSCRIPTION_ID}/resourcegroups/rg-prodigy1-dev/providers/Microsoft.Resources/deployments/${DEPLOYMENT_NAME}?api-version=2021-04-01" \
-      -H "Authorization: Bearer $ACCESS_TOKEN" | \
-      jq '.properties.error // empty'
+    echo "$RESPONSE" | jq '.properties.error // empty'
     exit 1
   fi
 done
 
 echo "⏰ Deployment timeout - checking final status..."
-FINAL_STATUS=$(curl -s -X GET \
+FINAL_RESPONSE=$(curl -s -X GET \
   "https://management.azure.com/subscriptions/${AZURE_SUBSCRIPTION_ID}/resourcegroups/rg-prodigy1-dev/providers/Microsoft.Resources/deployments/${DEPLOYMENT_NAME}?api-version=2021-04-01" \
-  -H "Authorization: Bearer $ACCESS_TOKEN" | \
-  jq -r '.properties.provisioningState // "Unknown"')
+  -H "Authorization: Bearer $ACCESS_TOKEN")
+
+FINAL_STATUS=$(echo "$FINAL_RESPONSE" | jq -r '.properties.provisioningState // "Unknown"')
+
+echo "Final response debug: $FINAL_RESPONSE" | head -c 500
 
 if [ "$FINAL_STATUS" == "Succeeded" ]; then
   echo "✅ Infrastructure deployment completed successfully"
   exit 0
 else
   echo "❌ Infrastructure deployment failed or timed out: $FINAL_STATUS"
+  if [ "$FINAL_STATUS" == "Failed" ]; then
+    echo "$FINAL_RESPONSE" | jq '.properties.error // empty'
+  fi
   exit 1
 fi
