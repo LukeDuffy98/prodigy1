@@ -26,6 +26,40 @@ This project is configured with **GitHub Copilot Agent** to accelerate developme
 - **AI Integration**: GitHub Copilot for development assistance
 - **Infrastructure**: Azure cloud services defined with Bicep templates
 
+## 🚀 Quick Start
+
+### Automated Deployment with CI/CD
+The fastest way to deploy this application is using our automated CI/CD pipeline:
+
+1. **Fork this repository** to your GitHub account
+2. **Set up Azure credentials** following our [CI/CD Setup Guide](docs/CI-CD-SETUP.md)
+3. **Run the deployment workflow** from GitHub Actions
+4. **Access your deployed application** via the provided Azure URLs
+
+### Local Development
+For local development, use our cross-platform startup scripts:
+
+**Windows (PowerShell):**
+```powershell
+.\start-dev.ps1
+```
+
+**macOS/Linux (Bash):**
+```bash
+./start-dev.sh
+```
+
+**Windows (Batch):**
+```batch
+start-dev.bat
+```
+
+These scripts will automatically:
+- Check and install prerequisites
+- Install dependencies for both frontend and backend
+- Start both services concurrently
+- Open the application in your browser
+
 ## Prerequisites
 
 ### Development Environment
@@ -42,6 +76,11 @@ This project is configured with **GitHub Copilot Agent** to accelerate developme
 - Azure App Service plan
 - Azure Function App
 - Azure Storage Account (for Function Apps)
+
+### CI/CD Pipeline Requirements
+- GitHub repository
+- Azure Service Principal (configured via secrets)
+- Azure subscription with deployment permissions
 
 ## Project Structure
 
@@ -264,32 +303,82 @@ Ensure your Azure Function App allows requests from your frontend domain:
 - `FUNCTIONS_WORKER_RUNTIME`: node
 - Custom application settings as needed
 
+## CI/CD and Deployment
+
+This project includes comprehensive CI/CD workflows for automated deployment to Azure:
+
+### Available Workflows
+
+1. **🚀 Azure Deploy** (`azure-deploy.yml`)
+   - **Trigger**: Manual workflow dispatch
+   - **Purpose**: Deploy application to Azure
+   - **Environments**: dev, staging, prod
+   - **Stages**: Infrastructure → Backend → Frontend → Health Check
+
+2. **🧪 Build and Test** (`build-test.yml`)
+   - **Trigger**: Pull requests to main branch
+   - **Purpose**: Quality assurance pipeline
+   - **Checks**: Lint, Build, Test, Security Scan, Performance
+
+3. **🏗️ Infrastructure Management** (`infrastructure.yml`)
+   - **Trigger**: Manual workflow dispatch
+   - **Purpose**: Manage Azure infrastructure
+   - **Actions**: deploy, destroy, validate
+
+### Deployment Guide
+
+1. **Initial Setup**: Follow the [CI/CD Setup Guide](docs/CI-CD-SETUP.md)
+2. **Configure Secrets**: Add `AZURE_CREDENTIALS` to GitHub repository secrets
+3. **Deploy Infrastructure**: Run the Infrastructure Management workflow
+4. **Deploy Application**: Run the Azure Deploy workflow
+5. **Monitor**: Check deployment status and application health
+
+### Environment Configuration
+
+- **Development**: Free tier Azure resources, CORS enabled for localhost
+- **Staging**: Basic tier resources, production-like configuration
+- **Production**: Production tier resources, enhanced security and monitoring
+
 ## Security Considerations
 
 1. **Authentication**: Implement Azure AD B2C or other auth providers
 2. **API Keys**: Use Azure Function App keys for API protection
-3. **CORS**: Configure proper CORS policies
+3. **CORS**: Configure proper CORS policies (automated in CI/CD)
 4. **HTTPS**: Ensure all communication uses HTTPS in production
 5. **Environment Variables**: Store sensitive data in Azure Key Vault
+6. **Service Principal**: Use least-privilege access for deployments
 
 ## Monitoring and Logging
 
-- **Application Insights**: Enable for both frontend and backend
-- **Azure Monitor**: Set up alerts and dashboards
+- **Application Insights**: Enabled automatically for both frontend and backend
+- **Azure Monitor**: Configured with deployment workflows
 - **Function App Logs**: Monitor function execution and errors
+- **GitHub Actions**: Track deployment success and failures
+- **Health Checks**: Automated health verification after deployments
 
 ## Development Workflow
 
+### Local Development
+1. Clone repository: `git clone https://github.com/LukeDuffy98/prodigy1.git`
+2. Run setup script: `./start-dev.sh` (or OS equivalent)
+3. Develop with hot-reload enabled
+4. Use GitHub Copilot for assistance
+
+### Deployment Workflow
 1. Create feature branch: `git checkout -b feature/new-feature`
-2. Develop locally with both frontend and backend running
-3. Use GitHub Copilot for code assistance and reviews
-4. Test API integration
-5. Commit changes: `git commit -m "Add new feature"`
-6. Push branch: `git push origin feature/new-feature`
-7. Create pull request using the provided template
-8. Deploy to staging environment
-9. Test in staging
-10. Deploy to production
+2. Develop and test locally
+3. Push changes: `git push origin feature/new-feature`
+4. Create pull request (triggers automated testing)
+5. Merge to main (can trigger automated deployment)
+6. Monitor deployment in GitHub Actions
+7. Verify in target environment
+
+### Production Releases
+1. Code review and approval required
+2. Automated testing must pass
+3. Infrastructure deployed first (if changes)
+4. Application deployed with health checks
+5. Rollback capability available
 
 ## Contributing
 
@@ -308,6 +397,7 @@ This project leverages GitHub Copilot for enhanced collaboration:
 ## Documentation
 
 - 📖 [Main README](README.md) - This file, project overview and setup
+- 🚀 [CI/CD Setup Guide](docs/CI-CD-SETUP.md) - Complete guide for automated deployment
 - 🤖 [Copilot Guide](docs/copilot-guide.md) - Comprehensive guide for GitHub Copilot
 - 🤖 [Copilot Usage Guide](docs/copilot-usage-guide.md) - AI-assisted development best practices
 - 🤖 [Copilot Instructions](.github/copilot-instructions.md) - Project-specific AI guidelines
