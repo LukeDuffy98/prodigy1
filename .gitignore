@@ -10,6 +10,11 @@ pids
 *.seed
 *.pid.lock
 
+# Production builds
+/build
+/dist
+/out
+
 # Environment variables
 .env
 .env.local
@@ -28,6 +33,11 @@ backend/bin/
 backend/obj/
 backend/.azure/
 backend/local.settings.json
+bin
+obj
+appsettings.json
+local.settings.json
+.azurefunctions/
 
 # Azure Storage Emulator
 backend/__blobstorage__/
@@ -36,6 +46,9 @@ backend/__azurite_db*__.json
 
 # IDE and Editor files
 .vscode/
+.vscode/launch.json
+.vscode/tasks.json
+.vscode/c_cpp_properties.json
 .idea/
 *.swp
 *.swo
@@ -54,13 +67,9 @@ Thumbs.db
 logs
 *.log
 
-# Runtime data
-pids
-*.pid
-*.seed
-
 # Coverage directory used by tools like istanbul
 coverage/
+*.lcov
 
 # nyc test coverage
 .nyc_output
@@ -90,3 +99,21 @@ deploy.cmd
 
 # Local development files
 azurite/
+
+# TypeScript
+*.tsbuildinfo
+
+# Azure
+.azure/
+
+# Temporary files
+*.tmp
+*.temp
+
+# Package manager locks (keep yarn.lock or package-lock.json, not both)
+# package-lock.json
+# yarn.lock
+
+# Copilot generated files (temporary)
+copilot-suggestions.md
+ai-analysis.md

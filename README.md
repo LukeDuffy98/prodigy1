@@ -1,12 +1,30 @@
-# Prodigy1
+# Prodigy1 🚀
 
-A modern web application with an Azure App Service frontend that communicates with Azure Function Apps for backend services.
+A modern web application with an Azure App Service frontend that communicates with Azure Function Apps for backend services, enhanced with GitHub Copilot AI assistance.
+
+## 🤖 AI-Powered Development
+
+This project is configured with **GitHub Copilot Agent** to accelerate development and improve code quality through AI assistance.
+
+### Quick AI Setup
+1. **Install VS Code Extensions**: Recommended extensions are configured in `.vscode/extensions.json`
+2. **Enable GitHub Copilot**: Ensure you have a Copilot subscription and the extension is active
+3. **Read the Guide**: Check out our [Copilot Usage Guide](docs/copilot-usage-guide.md) for best practices
+
+### Copilot Features
+- 🧠 **Intelligent Code Generation**: AI-powered suggestions for Azure Functions and React components
+- 🔍 **Automated Code Review**: GitHub Actions workflows provide AI-assisted PR reviews
+- 📋 **Smart Templates**: Issue and PR templates optimized for Copilot assistance
+- 🛠️ **Development Workflows**: Automated tasks for common development scenarios
+- 📚 **Comprehensive Documentation**: AI-generated guides and best practices
 
 ## Architecture Overview
 
-- **Frontend**: Web application hosted on Azure App Service
-- **Backend**: Serverless Azure Function Apps providing REST APIs
+- **Frontend**: Next.js TypeScript web application hosted on Azure App Service
+- **Backend**: Serverless Azure Function Apps providing REST APIs  
 - **Communication**: HTTP/HTTPS requests between frontend and backend
+- **AI Integration**: GitHub Copilot for development assistance
+- **Infrastructure**: Azure cloud services defined with Bicep templates
 
 ## Prerequisites
 
@@ -16,6 +34,7 @@ A modern web application with an Azure App Service frontend that communicates wi
 - Azure Functions Core Tools
 - Visual Studio Code (recommended)
 - Git
+- GitHub Copilot subscription
 
 ### Azure Requirements
 - Azure subscription
@@ -28,20 +47,36 @@ A modern web application with an Azure App Service frontend that communicates wi
 
 ```
 prodigy1/
-├── frontend/           # Web frontend application
+├── frontend/              # Next.js TypeScript web application
 │   ├── src/
-│   ├── public/
-│   ├── package.json
-│   └── ...
-├── backend/            # Azure Function Apps
-│   ├── functions/
-│   ├── host.json
-│   ├── local.settings.json
-│   └── ...
-├── infrastructure/     # Azure infrastructure as code
-│   ├── bicep/
-│   └── arm/
-└── docs/              # Additional documentation
+│   │   ├── pages/        # Next.js pages and API routes
+│   │   ├── components/   # React components
+│   │   └── services/     # API service layer
+│   ├── public/           # Static assets
+│   ├── styles/           # CSS styles
+│   └── package.json      # Frontend dependencies
+├── backend/               # Azure Function Apps
+│   ├── functions/        # Individual function endpoints
+│   │   ├── getData/      # GET /api/getData
+│   │   ├── createData/   # POST /api/createData
+│   │   └── health/       # GET /api/health
+│   ├── host.json         # Azure Functions host configuration
+│   ├── local.settings.json # Local development settings
+│   └── package.json      # Backend dependencies
+├── infrastructure/       # Azure infrastructure as code
+│   └── bicep/           # Azure Bicep templates
+│       ├── main.bicep   # Main infrastructure template
+│       └── parameters.*.json # Environment parameters
+├── docs/                 # Documentation
+│   ├── api.md           # API documentation
+│   ├── copilot-guide.md # Comprehensive Copilot guide
+│   ├── deployment.md    # Deployment guide
+│   └── development.md   # Development setup
+├── .github/             # GitHub templates and workflows
+│   ├── workflows/       # Copilot-enhanced CI/CD
+│   └── copilot-instructions.md # AI guidelines
+├── start-dev.*          # Local development scripts
+└── README.md            # This file
 ```
 
 ## Getting Started
@@ -128,6 +163,7 @@ This project is optimized for GitHub Copilot assistance. See the [Copilot Guide]
 - Check `docs/copilot-guide.md` for comprehensive project context
 - API service patterns are in `frontend/src/services/apiService.ts`
 - Function templates are in `backend/functions/` directories
+- Follow project guidelines in `.github/copilot-instructions.md`
 
 ## API Integration
 
@@ -246,50 +282,35 @@ Ensure your Azure Function App allows requests from your frontend domain:
 
 1. Create feature branch: `git checkout -b feature/new-feature`
 2. Develop locally with both frontend and backend running
-3. Test API integration
-4. Commit changes: `git commit -m "Add new feature"`
-5. Push branch: `git push origin feature/new-feature`
-6. Create pull request
-7. Deploy to staging environment
-8. Test in staging
-9. Deploy to production
-
-## Troubleshooting
-
-### Common Issues
-
-1. **CORS Errors**: Check CORS configuration in Function App
-2. **Function Not Found**: Verify function deployment and routing
-3. **Environment Variables**: Ensure all required settings are configured
-4. **Connection Issues**: Check network security groups and firewall rules
-
-### Debug Mode
-
-Enable debug logging in your Function App:
-```json
-{
-  "logging": {
-    "logLevel": {
-      "default": "Debug"
-    }
-  }
-}
-```
+3. Use GitHub Copilot for code assistance and reviews
+4. Test API integration
+5. Commit changes: `git commit -m "Add new feature"`
+6. Push branch: `git push origin feature/new-feature`
+7. Create pull request using the provided template
+8. Deploy to staging environment
+9. Test in staging
+10. Deploy to production
 
 ## Contributing
+
+This project leverages GitHub Copilot for enhanced collaboration:
 
 1. Fork the repository
 2. Create a feature branch: `git checkout -b feature/new-feature`
 3. Use the development scripts for consistent setup
 4. Make your changes following the patterns in `docs/copilot-guide.md`
-5. Test locally using `./start-dev.sh` (or equivalent for your OS)
-6. Add tests if applicable
-7. Submit a pull request
+5. Use GitHub Copilot Chat for code assistance and review
+6. Test locally using `./start-dev.sh` (or equivalent for your OS)
+7. Follow the PR template for comprehensive code reviews
+8. Add tests if applicable
+9. Submit a pull request
 
 ## Documentation
 
 - 📖 [Main README](README.md) - This file, project overview and setup
 - 🤖 [Copilot Guide](docs/copilot-guide.md) - Comprehensive guide for GitHub Copilot
+- 🤖 [Copilot Usage Guide](docs/copilot-usage-guide.md) - AI-assisted development best practices
+- 🤖 [Copilot Instructions](.github/copilot-instructions.md) - Project-specific AI guidelines
 - 🔧 [Development Setup](docs/development.md) - Detailed development environment setup
 - 📡 [API Documentation](docs/api.md) - REST API endpoints and examples
 - 🚀 [Deployment Guide](docs/deployment.md) - Step-by-step deployment instructions
@@ -315,19 +336,47 @@ The project includes VSCode configuration for optimal development:
 - **Tasks**: Predefined tasks for building and running services
 - **Launch Configurations**: Debug configurations for full-stack debugging
 - **Settings**: Optimized settings for TypeScript and Azure Functions development
-- **Extensions**: Recommended extensions for Azure development
+- **Extensions**: Recommended extensions for Azure development and GitHub Copilot
 
 Use `Ctrl+Shift+P` → "Tasks: Run Task" to access predefined development tasks.
+
+## Troubleshooting
+
+### Common Issues
+
+1. **CORS Errors**: Check CORS configuration in Function App
+2. **Function Not Found**: Verify function deployment and routing
+3. **Environment Variables**: Ensure all required settings are configured
+4. **Connection Issues**: Check network security groups and firewall rules
+
+### Debug Mode
+
+Enable debug logging in your Function App:
+```json
+{
+  "logging": {
+    "logLevel": {
+      "default": "Debug"
+    }
+  }
+}
+```
 
 ## Support
 
 For issues and questions:
-- 📋 Create an issue in this repository  
+- 🤖 **AI Assistance**: Use GitHub Copilot Chat for immediate help
+- 📋 Create an issue in this repository using our Copilot-enhanced templates
 - 📚 Check the documentation in the `docs/` folder
 - 🤖 Refer to `docs/copilot-guide.md` for Copilot-specific guidance
 - ☁️ Review Azure Functions and Next.js documentation
 - 🔍 Check Azure service health in the Azure portal
+- 💬 **Discussions**: Engage in project discussions with AI assistance
 
 ## License
 
 [Add your license information here]
+
+---
+
+*This project is enhanced with GitHub Copilot Agent for accelerated, AI-assisted development.*
