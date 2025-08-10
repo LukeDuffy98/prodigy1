@@ -33,7 +33,8 @@ try {
     if ($deploymentResult.ProvisioningState -eq "Succeeded") {
         Write-Host "✅ Infrastructure deployment completed successfully" -ForegroundColor Green
         exit 0
-    } else {
+    }
+    else {
         Write-Host "❌ Infrastructure deployment failed: $($deploymentResult.ProvisioningState)" -ForegroundColor Red
         exit 1
     }
