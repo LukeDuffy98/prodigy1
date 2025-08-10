@@ -1,0 +1,25 @@
+{
+  "recommendations": [
+    "github.copilot",
+    "github.copilot-chat",
+    "ms-vscode.vscode-typescript-next",
+    "esbenp.prettier-vscode",
+    "dbaeumer.vscode-eslint",
+    "ms-vscode.azure-account",
+    "ms-azuretools.vscode-azurefunctions",
+    "ms-azuretools.vscode-azureappservice",
+    "ms-azuretools.vscode-azurestorage",
+    "ms-azuretools.vscode-azurestaticwebapps",
+    "ms-vscode.vscode-json",
+    "bradlc.vscode-tailwindcss",
+    "ms-vscode.vscode-typescript-next",
+    "formulahendry.auto-rename-tag",
+    "ms-vscode.vscode-json",
+    "christian-kohler.path-intellisense",
+    "ms-vscode.vscode-npm-script"
+  ],
+  "unwantedRecommendations": [
+    "ms-vscode.vscode-typescript",
+    "hookyqr.beautify"
+  ]
+}

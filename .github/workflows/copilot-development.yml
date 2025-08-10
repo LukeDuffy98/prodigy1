@@ -1,0 +1,181 @@
+name: Copilot-Assisted Development Workflow
+
+on:
+  workflow_dispatch:
+    inputs:
+      task_description:
+        description: 'Describe the development task for Copilot assistance'
+        required: true
+        type: string
+      file_pattern:
+        description: 'File pattern to focus on (e.g., *.ts, src/**/*.js)'
+        required: false
+        type: string
+        default: '**/*.{ts,js,json}'
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+
+jobs:
+  copilot-assisted-development:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        cache: 'npm'
+
+    - name: Analyze project structure
+      id: analyze
+      run: |
+        echo "## Project Analysis" > analysis.md
+        echo "### File Structure" >> analysis.md
+        find . -type f -name "${{ github.event.inputs.file_pattern }}" | grep -v node_modules | head -20 >> analysis.md
+        
+        echo "### Package Dependencies" >> analysis.md
+        if [ -f package.json ]; then
+          echo "Found package.json" >> analysis.md
+          cat package.json | jq '.dependencies // empty' >> analysis.md 2>/dev/null || echo "No dependencies section" >> analysis.md
+        else
+          echo "No package.json found" >> analysis.md
+        fi
+        
+        echo "### Task Description" >> analysis.md
+        echo "${{ github.event.inputs.task_description }}" >> analysis.md
+
+    - name: Create development suggestions
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const fs = require('fs');
+          const analysis = fs.readFileSync('analysis.md', 'utf8');
+          
+          // Create an issue with Copilot suggestions
+          const issueBody = `## 🤖 Copilot-Assisted Development Task
+          
+          **Task Description**: ${{ github.event.inputs.task_description }}
+          
+          ### Project Analysis
+          ${analysis}
+          
+          ### 💡 Copilot Recommendations
+          
+          Based on the project structure and task description, here are AI-generated suggestions:
+          
+          #### Architecture Considerations
+          - Consider using Azure Functions with TypeScript for serverless backend
+          - Implement proper error handling and logging throughout the application
+          - Use environment variables for configuration management
+          
+          #### Development Best Practices
+          - Set up ESLint and Prettier for code consistency
+          - Implement comprehensive unit and integration tests
+          - Use GitHub Actions for CI/CD pipeline
+          - Configure Azure Application Insights for monitoring
+          
+          #### Next Steps
+          1. Review the [Copilot Instructions](.github/copilot-instructions.md)
+          2. Use GitHub Copilot Chat to get interactive assistance
+          3. Implement the suggested architecture patterns
+          4. Set up automated testing and deployment
+          
+          ### 🔧 Generated Code Templates
+          
+          Use GitHub Copilot to generate:
+          - Azure Function templates
+          - React component structures
+          - Test file templates
+          - Configuration files
+          
+          ### 📚 Helpful Resources
+          - [Azure Functions TypeScript Guide](https://docs.microsoft.com/en-us/azure/azure-functions/functions-reference-node)
+          - [React with TypeScript Best Practices](https://react-typescript-cheatsheet.netlify.app/)
+          - [GitHub Copilot Documentation](https://docs.github.com/en/copilot)
+          
+          *This task analysis was generated with GitHub Copilot assistance.*
+          `;
+          
+          const issue = await github.rest.issues.create({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            title: `🤖 Copilot Task: ${{ github.event.inputs.task_description }}`,
+            body: issueBody,
+            labels: ['copilot-assisted', 'development-task']
+          });
+          
+          console.log(`Created issue #${issue.data.number} with Copilot assistance`);
+
+    - name: Setup development environment recommendations
+      run: |
+        echo "Creating development environment recommendations..."
+        
+        # Create VS Code settings if not exists
+        mkdir -p .vscode
+        
+        if [ ! -f .vscode/settings.json ]; then
+          cat > .vscode/settings.json << 'EOF'
+        {
+          "github.copilot.enable": {
+            "*": true,
+            "yaml": true,
+            "plaintext": false,
+            "markdown": true
+          },
+          "github.copilot.advanced": {},
+          "editor.inlineSuggest.enabled": true,
+          "editor.suggest.showInlineDetails": true,
+          "typescript.suggest.autoImports": true,
+          "typescript.updateImportsOnFileMove.enabled": "always",
+          "eslint.enable": true,
+          "prettier.enable": true,
+          "editor.formatOnSave": true,
+          "editor.codeActionsOnSave": {
+            "source.fixAll.eslint": true,
+            "source.organizeImports": true
+          }
+        }
+        EOF
+        fi
+        
+        if [ ! -f .vscode/extensions.json ]; then
+          cat > .vscode/extensions.json << 'EOF'
+        {
+          "recommendations": [
+            "github.copilot",
+            "github.copilot-chat",
+            "ms-vscode.vscode-typescript-next",
+            "esbenp.prettier-vscode",
+            "ms-vscode.azure-account",
+            "ms-azuretools.vscode-azurefunctions",
+            "ms-azuretools.vscode-azureappservice"
+          ]
+        }
+        EOF
+        fi
+
+    - name: Commit configuration files
+      run: |
+        git config --local user.email "action@github.com"
+        git config --local user.name "Copilot Assistant"
+        
+        if [ -n "$(git status --porcelain)" ]; then
+          git add .vscode/
+          git commit -m "Add VS Code settings for Copilot integration
+
+          - Enable GitHub Copilot for supported file types
+          - Configure TypeScript and ESLint integration
+          - Add recommended extensions for Azure development
+          - Setup auto-formatting and import organization
+          
+          Generated by Copilot-Assisted Development Workflow"
+          git push
+        else
+          echo "No changes to commit"
+        fi

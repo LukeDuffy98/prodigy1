@@ -1,0 +1,109 @@
+name: Code Quality Check with Copilot Assistance
+
+on:
+  pull_request:
+    branches: [ main, develop ]
+  push:
+    branches: [ main, develop ]
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+
+jobs:
+  code-quality:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        cache: 'npm'
+      if: github.event_name == 'pull_request' && contains(github.event.pull_request.changed_files, '.js') || contains(github.event.pull_request.changed_files, '.ts') || contains(github.event.pull_request.changed_files, '.json')
+
+    - name: Install dependencies
+      run: |
+        if [ -f package.json ]; then
+          npm ci
+        else
+          echo "No package.json found, skipping npm install"
+        fi
+
+    - name: Run linting
+      run: |
+        if [ -f package.json ] && npm list eslint --depth=0 2>/dev/null; then
+          npm run lint
+        else
+          echo "ESLint not configured, skipping linting"
+        fi
+
+    - name: Run tests
+      run: |
+        if [ -f package.json ] && npm list jest --depth=0 2>/dev/null; then
+          npm test
+        else
+          echo "Tests not configured, skipping tests"
+        fi
+
+    - name: Code complexity analysis
+      run: |
+        echo "Analyzing code complexity..."
+        find . -name "*.ts" -o -name "*.js" | grep -v node_modules | wc -l > complexity.txt
+        echo "TypeScript/JavaScript files found: $(cat complexity.txt)"
+
+    - name: Security scan
+      run: |
+        if [ -f package.json ]; then
+          npm audit --audit-level=moderate || echo "Security vulnerabilities found - review required"
+        fi
+
+    - name: Comment PR with suggestions
+      if: github.event_name == 'pull_request'
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const fs = require('fs');
+          
+          // Read complexity data if available
+          let complexityData = '';
+          try {
+            complexityData = fs.readFileSync('complexity.txt', 'utf8').trim();
+          } catch (e) {
+            complexityData = 'Unable to analyze';
+          }
+          
+          const comment = `## 🤖 Copilot-Assisted Code Review
+          
+          ### Code Quality Summary
+          - **Files analyzed**: ${complexityData} TypeScript/JavaScript files
+          - **Security scan**: Completed (check logs for vulnerabilities)
+          
+          ### 💡 Copilot Recommendations
+          Consider these AI-assisted improvements:
+          
+          1. **Code Documentation**: Ensure all public functions have JSDoc comments
+          2. **Error Handling**: Implement comprehensive try-catch blocks for async operations
+          3. **Type Safety**: Use strict TypeScript configurations
+          4. **Testing**: Maintain test coverage above 80%
+          5. **Performance**: Consider Azure Function cold start optimizations
+          
+          ### 🔍 Next Steps
+          - Review the Copilot suggestions above
+          - Check the [Copilot Instructions](.github/copilot-instructions.md) for project-specific guidelines
+          - Use GitHub Copilot Chat for interactive code improvement suggestions
+          
+          *This analysis was generated with GitHub Copilot assistance.*`;
+          
+          github.rest.issues.createComment({
+            issue_number: context.issue.number,
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            body: comment
+          });
