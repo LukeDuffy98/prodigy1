@@ -75,41 +75,7 @@ resource appServicePlan 'Microsoft.Web/serverfarms@2022-09-01' = {
   }
 }
 
-// Web App (Frontend)
-resource webApp 'Microsoft.Web/sites@2022-09-01' = {
-  name: webAppName
-  location: location
-  properties: {
-    serverFarmId: appServicePlan.id
-    siteConfig: {
-      linuxFxVersion: webAppRuntime
-      appSettings: [
-        {
-          name: 'NEXT_PUBLIC_API_BASE_URL'
-          value: 'https://${functionApp.properties.defaultHostName}/api'
-        }
-        {
-          name: 'NEXT_PUBLIC_ENVIRONMENT'
-          value: environment
-        }
-        {
-          name: 'APPINSIGHTS_INSTRUMENTATIONKEY'
-          value: applicationInsights.properties.InstrumentationKey
-        }
-        {
-          name: 'APPLICATIONINSIGHTS_CONNECTION_STRING'
-          value: applicationInsights.properties.ConnectionString
-        }
-      ]
-      ftpsState: 'Disabled'
-      minTlsVersion: '1.2'
-      scmMinTlsVersion: '1.2'
-    }
-    httpsOnly: true
-  }
-}
-
-// Function App (Backend)
+// Function App (Backend) - Create first without CORS
 resource functionApp 'Microsoft.Web/sites@2022-09-01' = {
   name: functionAppName
   location: location
@@ -156,13 +122,6 @@ resource functionApp 'Microsoft.Web/sites@2022-09-01' = {
           value: environment
         }
       ]
-      cors: {
-        allowedOrigins: [
-          'https://${webApp.properties.defaultHostName}'
-          'http://localhost:3000' // For local development
-        ]
-        supportCredentials: false
-      }
       ftpsState: 'Disabled'
       minTlsVersion: '1.2'
       scmMinTlsVersion: '1.2'
@@ -171,9 +130,46 @@ resource functionApp 'Microsoft.Web/sites@2022-09-01' = {
   }
 }
 
+// Web App (Frontend) - Create after function app
+resource webApp 'Microsoft.Web/sites@2022-09-01' = {
+  name: webAppName
+  location: location
+  properties: {
+    serverFarmId: appServicePlan.id
+    siteConfig: {
+      linuxFxVersion: webAppRuntime
+      appSettings: [
+        {
+          name: 'NEXT_PUBLIC_API_BASE_URL'
+          value: 'https://${functionAppName}.azurewebsites.net/api'
+        }
+        {
+          name: 'NEXT_PUBLIC_ENVIRONMENT'
+          value: environment
+        }
+        {
+          name: 'APPINSIGHTS_INSTRUMENTATIONKEY'
+          value: applicationInsights.properties.InstrumentationKey
+        }
+        {
+          name: 'APPLICATIONINSIGHTS_CONNECTION_STRING'
+          value: applicationInsights.properties.ConnectionString
+        }
+      ]
+      ftpsState: 'Disabled'
+      minTlsVersion: '1.2'
+      scmMinTlsVersion: '1.2'
+    }
+    httpsOnly: true
+  }
+  dependsOn: [
+    functionApp
+  ]
+}
+
 // Outputs
-output webAppUrl string = 'https://${webApp.properties.defaultHostName}'
-output functionAppUrl string = 'https://${functionApp.properties.defaultHostName}'
+output webAppUrl string = 'https://${webAppName}.azurewebsites.net'
+output functionAppUrl string = 'https://${functionAppName}.azurewebsites.net'
 output storageAccountName string = storageAccount.name
 output applicationInsightsName string = applicationInsights.name
 output resourceGroupName string = resourceGroup().name
