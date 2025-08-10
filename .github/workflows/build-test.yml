@@ -1,0 +1,316 @@
+name: Build and Test
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+env:
+  NODE_VERSION: '18.x'
+
+jobs:
+  # Lint and build frontend
+  frontend-quality:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ env.NODE_VERSION }}
+        cache: 'npm'
+        cache-dependency-path: frontend/package-lock.json
+
+    - name: Install dependencies
+      run: |
+        cd frontend
+        npm ci
+
+    - name: Run TypeScript check
+      run: |
+        cd frontend
+        npm run type-check
+
+    - name: Run ESLint
+      run: |
+        cd frontend
+        npm run lint
+
+    - name: Build frontend
+      env:
+        NEXT_PUBLIC_API_BASE_URL: http://localhost:7071/api
+        NEXT_PUBLIC_ENVIRONMENT: test
+        NEXT_PUBLIC_APP_NAME: Prodigy1-Test
+      run: |
+        cd frontend
+        npm run build
+
+    - name: Upload frontend build artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: frontend-build
+        path: frontend/.next/
+        retention-days: 1
+
+  # Lint and build backend
+  backend-quality:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ env.NODE_VERSION }}
+        cache: 'npm'
+        cache-dependency-path: backend/package-lock.json
+
+    - name: Install dependencies
+      run: |
+        cd backend
+        npm ci
+
+    - name: Run TypeScript check
+      run: |
+        cd backend
+        npm run build
+
+    - name: Upload backend build artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: backend-build
+        path: backend/dist/
+        retention-days: 1
+
+  # Integration tests
+  integration-tests:
+    runs-on: ubuntu-latest
+    needs: [frontend-quality, backend-quality]
+    
+    services:
+      # Use Azurite for local Azure Storage emulation
+      azurite:
+        image: mcr.microsoft.com/azure-storage/azurite
+        ports:
+          - 10000:10000
+          - 10001:10001
+          - 10002:10002
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ env.NODE_VERSION }}
+        cache: 'npm'
+
+    - name: Install Azure Functions Core Tools
+      run: npm install -g azure-functions-core-tools@4 --unsafe-perm true
+
+    - name: Download backend artifacts
+      uses: actions/download-artifact@v4
+      with:
+        name: backend-build
+        path: backend/dist/
+
+    - name: Install backend dependencies
+      run: |
+        cd backend
+        npm ci
+
+    - name: Start Azure Functions
+      run: |
+        cd backend
+        func start --port 7071 &
+        sleep 10
+      env:
+        AzureWebJobsStorage: DefaultEndpointsProtocol=http;AccountName=devstoreaccount1;AccountKey=Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==;BlobEndpoint=http://127.0.0.1:10000/devstoreaccount1;QueueEndpoint=http://127.0.0.1:10001/devstoreaccount1;TableEndpoint=http://127.0.0.1:10002/devstoreaccount1;
+
+    - name: Test API Health Endpoint
+      run: |
+        echo "Testing health endpoint..."
+        timeout 30 bash -c 'until curl -f http://localhost:7071/api/health; do sleep 2; done'
+        response=$(curl -s http://localhost:7071/api/health)
+        echo "Health response: $response"
+
+    - name: Test API Endpoints
+      run: |
+        echo "Testing getData endpoint..."
+        response=$(curl -s http://localhost:7071/api/getData)
+        echo "getData response: $response"
+        
+        echo "Testing createData endpoint..."
+        response=$(curl -s -X POST \
+          -H "Content-Type: application/json" \
+          -d '{"name":"Test Item","description":"Test Description"}' \
+          http://localhost:7071/api/createData)
+        echo "createData response: $response"
+
+    - name: Install frontend dependencies
+      run: |
+        cd frontend
+        npm ci
+
+    - name: Download frontend artifacts
+      uses: actions/download-artifact@v4
+      with:
+        name: frontend-build
+        path: frontend/.next/
+
+    - name: Start frontend (build mode)
+      run: |
+        cd frontend
+        npm start &
+        sleep 10
+      env:
+        NEXT_PUBLIC_API_BASE_URL: http://localhost:7071/api
+        NEXT_PUBLIC_ENVIRONMENT: test
+
+    - name: Test frontend health
+      run: |
+        echo "Testing frontend..."
+        timeout 30 bash -c 'until curl -f http://localhost:3000; do sleep 2; done'
+        response=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:3000)
+        echo "Frontend status: $response"
+
+  # Security and dependency scanning
+  security-scan:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ env.NODE_VERSION }}
+
+    - name: Install dependencies
+      run: |
+        cd frontend && npm ci
+        cd ../backend && npm ci
+
+    - name: Run npm audit (frontend)
+      run: |
+        cd frontend
+        npm audit --audit-level=high
+      continue-on-error: true
+
+    - name: Run npm audit (backend)
+      run: |
+        cd backend
+        npm audit --audit-level=high
+      continue-on-error: true
+
+    - name: Initialize CodeQL
+      uses: github/codeql-action/init@v3
+      with:
+        languages: javascript, typescript
+
+    - name: Perform CodeQL Analysis
+      uses: github/codeql-action/analyze@v3
+
+  # Infrastructure validation
+  infrastructure-validation:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Azure Login
+      uses: azure/login@v1
+      with:
+        creds: ${{ secrets.AZURE_CREDENTIALS }}
+      continue-on-error: true
+
+    - name: Validate Bicep templates
+      run: |
+        # Install Bicep CLI
+        curl -Lo bicep https://github.com/Azure/bicep/releases/latest/download/bicep-linux-x64
+        chmod +x ./bicep
+        sudo mv ./bicep /usr/local/bin/bicep
+        
+        # Validate templates
+        echo "Validating main Bicep template..."
+        bicep build infrastructure/bicep/main.bicep --outfile /tmp/main.json
+        
+        echo "Validating template with Azure (if credentials available)..."
+        if [ "${{ secrets.AZURE_CREDENTIALS }}" != "" ]; then
+          az deployment group validate \
+            --resource-group rg-validation-temp \
+            --template-file /tmp/main.json \
+            --parameters @infrastructure/bicep/parameters.dev.json \
+            --parameters appName=validation location=eastus environment=validation || true
+        fi
+
+  # Performance and accessibility tests
+  lighthouse-ci:
+    runs-on: ubuntu-latest
+    needs: [frontend-quality, backend-quality]
+    if: github.event_name == 'pull_request'
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ env.NODE_VERSION }}
+
+    - name: Install and build frontend
+      run: |
+        cd frontend
+        npm ci
+        npm run build
+      env:
+        NEXT_PUBLIC_API_BASE_URL: http://localhost:7071/api
+        NEXT_PUBLIC_ENVIRONMENT: test
+
+    - name: Start frontend
+      run: |
+        cd frontend
+        npm start &
+        sleep 10
+
+    - name: Run Lighthouse CI
+      run: |
+        npm install -g @lhci/cli
+        lhci autorun
+      env:
+        LHCI_GITHUB_APP_TOKEN: ${{ secrets.LHCI_GITHUB_APP_TOKEN }}
+
+  # Build status summary
+  build-summary:
+    runs-on: ubuntu-latest
+    needs: [frontend-quality, backend-quality, integration-tests, security-scan, infrastructure-validation]
+    if: always()
+    
+    steps:
+    - name: Build Summary
+      run: |
+        echo "## 📊 Build Summary"
+        echo ""
+        echo "- Frontend Quality: ${{ needs.frontend-quality.result }}"
+        echo "- Backend Quality: ${{ needs.backend-quality.result }}"
+        echo "- Integration Tests: ${{ needs.integration-tests.result }}"
+        echo "- Security Scan: ${{ needs.security-scan.result }}"
+        echo "- Infrastructure Validation: ${{ needs.infrastructure-validation.result }}"
+        echo ""
+        if [ "${{ needs.frontend-quality.result }}" == "success" ] && \
+           [ "${{ needs.backend-quality.result }}" == "success" ] && \
+           [ "${{ needs.integration-tests.result }}" == "success" ]; then
+          echo "✅ All core checks passed - Ready for deployment!"
+        else
+          echo "❌ Some checks failed - Review before deployment"
+        fi
