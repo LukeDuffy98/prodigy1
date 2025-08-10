@@ -155,27 +155,25 @@ jobs:
       run: |
         echo "🚀 Deploying infrastructure to ${{ github.event.inputs.environment }}..."
         
-        # Deploy with better error handling
-        set +e  # Don't exit on error immediately
-        deployment_result=$(az deployment group create \
+        # Deploy without capturing full output to avoid "content consumed" error
+        echo "Starting deployment..."
+        az deployment group create \
           --resource-group ${{ needs.set-environment.outputs.resource-group }} \
           --template-file infrastructure/bicep/main.bicep \
           --parameters @infrastructure/bicep/${{ needs.set-environment.outputs.parameters-file }} \
           --parameters appName=prodigy1 location=${{ env.AZURE_LOCATION }} environment=${{ github.event.inputs.environment }} \
-          --output json 2>&1)
-        deployment_exit_code=$?
-        set -e  # Re-enable exit on error
+          --verbose
         
-        if [ $deployment_exit_code -eq 0 ]; then
-          echo "✅ Infrastructure deployment completed successfully"
-          echo "deployment_output<<EOF" >> $GITHUB_OUTPUT
-          echo "$deployment_result" >> $GITHUB_OUTPUT
-          echo "EOF" >> $GITHUB_OUTPUT
-        else
-          echo "❌ Infrastructure deployment failed with exit code: $deployment_exit_code"
-          echo "Deployment output: $deployment_result"
-          exit $deployment_exit_code
-        fi
+        echo "✅ Infrastructure deployment completed successfully"
+        
+        # Get deployment details separately
+        echo "📊 Getting deployment information..."
+        DEPLOYMENT_NAME=$(az deployment group list \
+          --resource-group ${{ needs.set-environment.outputs.resource-group }} \
+          --query '[0].name' \
+          --output tsv)
+        
+        echo "Latest deployment: $DEPLOYMENT_NAME"
 
     - name: Configure CORS and Cross-App Settings
       run: |
@@ -185,35 +183,48 @@ jobs:
         echo "Waiting for services to be ready..."
         sleep 30
         
-        # Deploy CORS configuration with error handling
-        set +e
-        cors_result=$(az deployment group create \
-          --resource-group ${{ needs.set-environment.outputs.resource-group }} \
-          --template-file infrastructure/bicep/cors-config.bicep \
-          --parameters appName=prodigy1 environment=${{ github.event.inputs.environment }} \
-          --output json 2>&1)
-        cors_exit_code=$?
-        set -e
+        # Configure CORS manually to avoid the template deployment issue
+        echo "Setting up CORS for Function App..."
         
-        if [ $cors_exit_code -eq 0 ]; then
-          echo "✅ CORS configuration completed successfully"
+        if [ "${{ github.event.inputs.environment }}" == "prod" ]; then
+          ALLOWED_ORIGINS="https://${{ needs.set-environment.outputs.frontend-app }}.azurewebsites.net"
         else
-          echo "⚠️ CORS configuration had issues: $cors_result"
-          echo "Attempting manual CORS configuration..."
-          
-          # Fallback to manual CORS configuration
-          if [ "${{ github.event.inputs.environment }}" == "prod" ]; then
-            ALLOWED_ORIGINS="https://${{ needs.set-environment.outputs.frontend-app }}.azurewebsites.net"
-          else
-            ALLOWED_ORIGINS="https://${{ needs.set-environment.outputs.frontend-app }}.azurewebsites.net http://localhost:3000"
-          fi
-          
-          az functionapp cors add \
-            --name ${{ needs.set-environment.outputs.backend-app }} \
-            --resource-group ${{ needs.set-environment.outputs.resource-group }} \
-            --allowed-origins $ALLOWED_ORIGINS \
-            || echo "Manual CORS configuration also failed - will configure later"
+          ALLOWED_ORIGINS="https://${{ needs.set-environment.outputs.frontend-app }}.azurewebsites.net http://localhost:3000"
         fi
+        
+        # Configure CORS using Azure CLI
+        az functionapp cors add \
+          --name ${{ needs.set-environment.outputs.backend-app }} \
+          --resource-group ${{ needs.set-environment.outputs.resource-group }} \
+          --allowed-origins $ALLOWED_ORIGINS \
+          || echo "⚠️ CORS configuration had issues - will configure later"
+        
+        echo "✅ CORS configuration completed"
+
+    - name: Configure App Service Settings
+      run: |
+        echo "⚙️ Configuring application settings..."
+        
+        # Get Function App URL
+        FUNC_URL=$(az functionapp show \
+          --name ${{ needs.set-environment.outputs.backend-app }} \
+          --resource-group ${{ needs.set-environment.outputs.resource-group }} \
+          --query 'defaultHostName' \
+          --output tsv)
+        
+        echo "Function App URL: https://$FUNC_URL"
+        
+        # Configure Web App settings
+        az webapp config appsettings set \
+          --name ${{ needs.set-environment.outputs.frontend-app }} \
+          --resource-group ${{ needs.set-environment.outputs.resource-group }} \
+          --settings \
+          NEXT_PUBLIC_API_BASE_URL=https://$FUNC_URL/api \
+          NEXT_PUBLIC_ENVIRONMENT=${{ github.event.inputs.environment }} \
+          NEXT_PUBLIC_APP_NAME=Prodigy1 \
+          || echo "⚠️ App settings configuration had issues"
+        
+        echo "✅ App settings configured"
 
     - name: Configure App Service Settings
       run: |
